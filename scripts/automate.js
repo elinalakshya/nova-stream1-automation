@@ -20,10 +20,13 @@ for (const env of requiredEnv) {
   }
 }
 
+// --- The active Google Vids project URL ---
+const PROJECT_URL = 'https://docs.google.com/videos/d/1_RanWJdddCUEDlFSuPb-baj-GruCdJDyy7PS9VpgWHc/edit?scene=id.p#scene=id.p';
+
 async function run() {
   log('🚀 Script started');
   
-  // Parse scenes - handle empty or invalid JSON
+  // Parse scenes
   let scenes = [];
   try {
     const scenesRaw = process.env.SCENES;
@@ -107,68 +110,27 @@ async function run() {
   }
 
   try {
-    log('🌐 Navigating to Google Vids...');
-    await page.goto('https://vids.google.com');
-    await page.waitForTimeout(5000); // Wait for page to settle
+    // --- DIRECTLY NAVIGATE TO THE PROJECT ---
+    log('🌐 Navigating directly to the project...');
+    await page.goto(PROJECT_URL);
+    await page.waitForTimeout(5000);
     log(`📄 Page title: ${await page.title()}`);
     log(`🌍 Page URL: ${page.url()}`);
+    await page.screenshot({ path: 'project-page.png' });
+    log('📸 Project page screenshot saved');
 
-    await page.screenshot({ path: 'homepage.png' });
-    log('📸 Homepage screenshot saved');
-
-    // --- NEW UI: Click "Start a new video" ---
-    log('📹 Looking for "Start a new video" button...');
-    const startSelectors = [
-      'button:has-text("Start a new video")',
-      'button:has-text("Start new video")',
-      'button:has-text("New video")',
-      'a:has-text("Start a new video")',
-      'div[role="button"]:has-text("Start")',
-      '[aria-label="Start a new video"]',
-      '[data-testid="start-new-video"]',
-      'button[class*="start"]',
-      'button[class*="create"]:has-text("Start")'
-    ];
-    
-    let startSuccess = await smartClick(startSelectors, 'Start a new video');
-    if (!startSuccess) {
-      log('⚠️ Start button not found, trying alternative...');
-      // Try clicking on the main area
-      await page.click('body');
-      await page.waitForTimeout(2000);
-      startSuccess = await smartClick(startSelectors, 'Start a new video');
+    // --- CHECK IF WE'RE IN THE EDITOR ---
+    const currentUrl = page.url();
+    if (!currentUrl.includes('edit')) {
+      log('⚠️ Not in editor mode, trying to enter...');
+      // Try clicking Edit button
+      await smartClick([
+        'button:has-text("Edit")',
+        '[aria-label="Edit"]',
+        'a:has-text("Edit")'
+      ], 'Edit');
+      await page.waitForTimeout(3000);
     }
-
-    if (!startSuccess) {
-      log('❌ Failed to find Start button');
-      await page.screenshot({ path: 'error-start.png' });
-      throw new Error('Start a new video button not found');
-    }
-
-    // --- Select orientation ---
-    log('📹 Selecting orientation...');
-    await page.waitForTimeout(3000);
-    const orientationSelectors = [
-      'button:has-text("Landscape")',
-      'button:has-text("16:9")',
-      '[aria-label="Landscape"]',
-      '[data-testid="landscape"]'
-    ];
-    await smartClick(orientationSelectors, 'Landscape');
-
-    // --- Create AI video ---
-    log('📹 Looking for "Create AI video" button...');
-    await page.waitForTimeout(2000);
-    const aiSelectors = [
-      'button:has-text("Create AI video")',
-      'button:has-text("AI video")',
-      'button:has-text("Create with AI")',
-      '[aria-label="Create AI video"]',
-      '[data-testid="ai-video"]'
-    ];
-    await smartClick(aiSelectors, 'AI video');
-
-    await page.waitForTimeout(5000);
 
     // --- SCENE LOOP ---
     for (let i = 0; i < scenes.length; i++) {
