@@ -1,0 +1,44 @@
+name: NOVA Stream 1 – Playwright Automation
+
+on:
+  repository_dispatch:
+    types: [run-stream1]
+
+jobs:
+  automate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Run Playwright automation
+        env:
+          VIDS_AUTH: ${{ secrets.VIDS_AUTH }}
+          YOUTUBE_CREDENTIALS: ${{ secrets.YOUTUBE_CREDENTIALS }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SCENES: ${{ github.event.client_payload.scenes }}
+          TOPIC: ${{ github.event.client_payload.topic }}
+          DATE: ${{ github.event.client_payload.date }}
+        run: |
+          node scripts/automate.js
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: output-video
+          path: ./output/*.mp4
