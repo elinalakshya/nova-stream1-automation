@@ -7,7 +7,9 @@ on:
 jobs:
   automate:
     runs-on: ubuntu-latest
-    
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,8 +26,8 @@ jobs:
 
       - name: Install FFmpeg
         run: |
-             sudo apt-get update
-             sudo apt-get install -y ffmpeg
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Run Playwright automation
         env:
@@ -44,3 +46,12 @@ jobs:
         with:
           name: output-video
           path: ./output/*.mp4
+
+      - name: Upload error screenshot
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: error-screenshots
+          path: |
+            error-*.png
+            error-screenshot.png
