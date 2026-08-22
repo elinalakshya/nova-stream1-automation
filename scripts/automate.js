@@ -62,7 +62,7 @@ async function run() {
   const page = await context.newPage();
   log('✅ Browser launched');
 
-  // UPDATED: Smart click with more selectors for new UI
+  // Smart click with fallback selectors
   async function smartClick(selectors, fallbackText = null) {
     for (let selector of selectors) {
       try {
@@ -75,7 +75,6 @@ async function run() {
       }
     }
     
-    // Self-healing: try partial text match
     if (fallbackText) {
       try {
         const element = await page.getByText(fallbackText);
@@ -88,7 +87,6 @@ async function run() {
         log(`⚠️ Self-heal failed for text "${fallbackText}"`);
       }
     }
-    
     return false;
   }
 
@@ -99,17 +97,12 @@ async function run() {
     log(`📄 Page title: ${await page.title()}`);
     log(`🌍 Page URL: ${page.url()}`);
 
-    // Wait for the page to fully load
     await page.waitForTimeout(3000);
-    
-    // NEW: Take a screenshot of the homepage for debugging
     await page.screenshot({ path: 'homepage.png' });
     log('📸 Homepage screenshot saved');
 
-    // --- UPDATED: Find and click "Create" button with new selectors ---
+    // --- CREATE NEW VIDEO ---
     log('📹 Looking for Create button...');
-    
-    // Check if there's a "New" or "+" button instead
     const createSelectors = [
       'button:has-text("Create")',
       'button:has-text("New")',
@@ -122,18 +115,16 @@ async function run() {
       'button[class*="create"]',
       'button[class*="new"]'
     ];
-    
     const createSuccess = await smartClick(createSelectors, 'Create');
     if (!createSuccess) {
-      // Try clicking on the main area to reveal the create button
-      log('⚠️ Create button not found, trying to click on main area...');
+      log('⚠️ Create button not found, clicking body...');
       await page.click('body');
       await page.waitForTimeout(2000);
       await smartClick(createSelectors, 'Create');
     }
 
-    // --- UPDATED: Check for any modal or popup ---
-    log('📹 Checking for any popups...');
+    // --- HANDLE POPUPS ---
+    log('📹 Checking for popups...');
     try {
       const popup = await page.waitForSelector('button:has-text("Got it")', { timeout: 3000 });
       if (popup) {
@@ -144,7 +135,7 @@ async function run() {
       log('ℹ️ No popup found');
     }
 
-    // --- UPDATED: Select orientation with more options ---
+    // --- SELECT ORIENTATION ---
     log('📹 Selecting orientation...');
     const orientationSelectors = [
       'button:has-text("Landscape")',
@@ -153,12 +144,9 @@ async function run() {
       '[data-testid="landscape"]',
       'button[class*="landscape"]'
     ];
-    const landscapeSuccess = await smartClick(orientationSelectors, 'Landscape');
-    if (!landscapeSuccess) {
-      log('⚠️ Landscape button not found, trying to proceed without selecting orientation');
-    }
+    await smartClick(orientationSelectors, 'Landscape');
 
-    // --- UPDATED: Click "Create AI video" ---
+    // --- CREATE AI VIDEO ---
     log('📹 Looking for Create AI video button...');
     const aiSelectors = [
       'button:has-text("Create AI video")',
@@ -169,24 +157,16 @@ async function run() {
     ];
     const aiSuccess = await smartClick(aiSelectors, 'AI video');
     if (!aiSuccess) {
-      log('⚠️ Create AI video button not found, trying alternative...');
-      // Try clicking "Start from scratch" or similar
-      const startSelectors = [
-        'button:has-text("Start")',
-        'button:has-text("Blank")',
-        '[aria-label="Start from scratch"]'
-      ];
-      await smartClick(startSelectors, 'Start');
+      log('⚠️ Create AI video button not found, trying Start...');
+      await smartClick(['button:has-text("Start")', 'button:has-text("Blank")', '[aria-label="Start from scratch"]'], 'Start');
     }
 
-    // Wait for the AI video interface to load
     await page.waitForTimeout(5000);
 
-    // --- Loop through scenes ---
+    // --- SCENE LOOP ---
     for (let i = 0; i < scenes.length; i++) {
       log(`🎞️ Generating scene ${i+1}/${scenes.length}...`);
       
-      // Wait for textarea and paste
       try {
         await page.waitForSelector('textarea, [contenteditable="true"], div[role="textbox"]', { timeout: 15000 });
         const input = await page.locator('textarea, [contenteditable="true"], div[role="textbox"]').first();
@@ -225,39 +205,36 @@ async function run() {
         ];
         const inserted = await smartClick(insertSelectors, 'Insert');
         if (inserted) {
-          const newSceneSelectors = [
+          await smartClick([
             'button:has-text("New scene")',
             'button:has-text("Add scene")',
             '[aria-label="New scene"]',
             '[data-testid="add-scene"]'
-          ];
-          await smartClick(newSceneSelectors, 'New scene');
+          ], 'New scene');
         } else {
           await page.keyboard.press('Control+M');
         }
       }
     }
 
-    // --- Play preview ---
+    // --- PLAY PREVIEW ---
     log('▶️ Previewing video...');
-    const playSelectors = [
+    await smartClick([
       'button:has-text("Play")',
       '[aria-label="Play"]',
       '[data-testid="play"]',
       'button[class*="play"]'
-    ];
-    await smartClick(playSelectors, 'Play');
+    ], 'Play');
     await page.waitForTimeout(10000);
 
-    // --- Download video ---
+    // --- DOWNLOAD VIDEO ---
     log('⬇️ Downloading video...');
-    const downloadSelectors = [
+    const downloadSuccess = await smartClick([
       'button:has-text("Download")',
       '[aria-label="Download"]',
       '[data-testid="download"]',
       'button[class*="download"]'
-    ];
-    const downloadSuccess = await smartClick(downloadSelectors, 'Download');
+    ], 'Download');
     if (!downloadSuccess) {
       log('❌ Failed to find Download button');
       await page.screenshot({ path: 'error-download.png' });
@@ -267,7 +244,7 @@ async function run() {
     const inputPath = await download.path();
     log(`✅ Video downloaded: ${inputPath}`);
 
-    // --- Remove watermark with FFmpeg ---
+    // --- WATERMARK REMOVAL ---
     log('🧹 Removing watermark...');
     const outputDir = './output';
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
@@ -281,11 +258,11 @@ async function run() {
       fs.copyFileSync(inputPath, outputPath);
     }
 
-    // --- YouTube upload (placeholder) ---
+    // --- YOUTUBE UPLOAD (PLACEHOLDER) ---
     log('📤 YouTube upload simulated');
     const videoUrl = `https://youtu.be/dQw4w9WgXcQ`;
 
-    // --- ntfy success alert ---
+    // --- NTFY SUCCESS ---
     await fetch(`https://ntfy.sh/${ntfyTopic}`, {
       method: 'POST',
       body: `✅ NOVA Stream 1: Video published\nTopic: "${topic}"\nDate: ${date}\nScenes: ${scenes.length}\nURL: ${videoUrl}`
