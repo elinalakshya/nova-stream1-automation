@@ -23,7 +23,9 @@ jobs:
           npx playwright install chromium
 
       - name: Install FFmpeg
-        run: sudo apt-get install -y ffmpeg
+        run: |
+             sudo apt-get update
+             sudo apt-get install -y ffmpeg
 
       - name: Run Playwright automation
         env:
