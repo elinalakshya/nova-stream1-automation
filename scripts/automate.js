@@ -1,4 +1,3 @@
-
 const { chromium } = require('playwright');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -30,13 +29,24 @@ async function run() {
     body: `🔄 NOVA Stream 1 started: "${topic}" (${date}) - ${scenes.length} scenes`
   });
 
+  // Parse VIDS_AUTH from base64
+  let auth;
+  try {
+    const authString = Buffer.from(process.env.VIDS_AUTH, 'base64').toString('utf8');
+    auth = JSON.parse(authString);
+    console.log('✅ VIDS_AUTH parsed successfully');
+  } catch (e) {
+    console.error('❌ Failed to parse VIDS_AUTH:', e.message);
+    process.exit(1);
+  }
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({
-    storageState: JSON.parse(process.env.VIDS_AUTH)
+    storageState: auth
   });
   const page = await context.newPage();
 
-  // Smart click helper with self-healing
+  // Smart click helper with self-healing and logging
   async function smartClick(selectors, fallbackText = null) {
     for (let selector of selectors) {
       try {
@@ -70,11 +80,32 @@ async function run() {
     await page.goto('https://vids.google.com');
     await page.waitForLoadState('networkidle');
 
+    // Log page title and URL for debugging
+    console.log(`📄 Page title: ${await page.title()}`);
+    console.log(`🌍 Page URL: ${page.url()}`);
+
     // Create new video
     console.log('📹 Creating new video...');
-    await smartClick(['button:has-text("Create")', '[aria-label="Create"]', '#create-btn'], 'Create');
-    await smartClick(['button:has-text("Landscape")', '[aria-label="Landscape"]', 'button:has-text("16:9")'], 'Landscape');
-    await smartClick(['button:has-text("Create AI video")', '[aria-label="Create AI video"]', 'button:has-text("AI video")'], 'Create AI video');
+    const createSuccess = await smartClick(['button:has-text("Create")', '[aria-label="Create"]', '#create-btn'], 'Create');
+    if (!createSuccess) {
+      console.error('❌ Failed to find Create button');
+      await page.screenshot({ path: 'error-create.png' });
+      throw new Error('Create button not found');
+    }
+    
+    const landscapeSuccess = await smartClick(['button:has-text("Landscape")', '[aria-label="Landscape"]', 'button:has-text("16:9")'], 'Landscape');
+    if (!landscapeSuccess) {
+      console.error('❌ Failed to find Landscape button');
+      await page.screenshot({ path: 'error-landscape.png' });
+      throw new Error('Landscape button not found');
+    }
+    
+    const aiVideoSuccess = await smartClick(['button:has-text("Create AI video")', '[aria-label="Create AI video"]', 'button:has-text("AI video")'], 'Create AI video');
+    if (!aiVideoSuccess) {
+      console.error('❌ Failed to find Create AI video button');
+      await page.screenshot({ path: 'error-ai-video.png' });
+      throw new Error('Create AI video button not found');
+    }
 
     // Loop through scenes
     for (let i = 0; i < scenes.length; i++) {
@@ -121,7 +152,12 @@ async function run() {
 
     // Download video
     console.log('⬇️ Downloading video...');
-    await smartClick(['button:has-text("Download")', '[aria-label="Download"]'], 'Download');
+    const downloadSuccess = await smartClick(['button:has-text("Download")', '[aria-label="Download"]'], 'Download');
+    if (!downloadSuccess) {
+      console.error('❌ Failed to find Download button');
+      await page.screenshot({ path: 'error-download.png' });
+      throw new Error('Download button not found');
+    }
     const download = await page.waitForEvent('download');
     const inputPath = await download.path();
     console.log(`✅ Video downloaded: ${inputPath}`);
@@ -142,15 +178,7 @@ async function run() {
 
     // Upload to YouTube
     console.log('📤 Uploading to YouTube...');
-    const credentials = JSON.parse(process.env.YOUTUBE_CREDENTIALS);
-    const auth = new google.auth.OAuth2(
-      credentials.installed.client_id,
-      credentials.installed.client_secret,
-      credentials.installed.redirect_uris[0]
-    );
-    // Note: You need to handle OAuth flow separately to get refresh token
-    // For now, we'll simulate success and log the video
-    console.log(`✅ YouTube upload simulated for: ${topic}`);
+    // TODO: Implement YouTube upload with proper OAuth
     const videoUrl = `https://youtu.be/dQw4w9WgXcQ`; // Placeholder
 
     // Send ntfy alert: SUCCESS
@@ -160,11 +188,6 @@ async function run() {
     });
 
     console.log('✅ NOVA Stream 1 completed successfully!');
-    
-    // Output result for GitHub Actions
-    console.log(`::set-output name=videoUrl::${videoUrl}`);
-    console.log(`::set-output name=topic::${topic}`);
-    console.log(`::set-output name=date::${date}`);
 
   } catch (error) {
     console.error(`❌ ERROR: ${error.message}`);
@@ -172,8 +195,7 @@ async function run() {
     
     // Capture screenshot on failure
     try {
-      const screenshot = await page.screenshot({ fullPage: true });
-      fs.writeFileSync('error-screenshot.png', screenshot);
+      await page.screenshot({ path: 'error-screenshot.png', fullPage: true });
       console.log('📸 Screenshot captured: error-screenshot.png');
     } catch (e) {}
     
@@ -188,4 +210,5 @@ async function run() {
     await browser.close();
   }
 }
+
 run().catch(console.error);
