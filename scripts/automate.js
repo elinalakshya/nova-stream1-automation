@@ -22,9 +22,25 @@ for (const env of requiredEnv) {
 
 async function run() {
   log('🚀 Script started');
-  const scenes = JSON.parse(process.env.SCENES);
-  const topic = process.env.TOPIC;
-  const date = process.env.DATE;
+  
+  // Parse scenes - handle empty or invalid JSON
+  let scenes = [];
+  try {
+    const scenesRaw = process.env.SCENES;
+    log(`📥 Raw SCENES: ${scenesRaw}`);
+    scenes = JSON.parse(scenesRaw);
+    if (!Array.isArray(scenes)) {
+      log('⚠️ SCENES is not an array, converting...');
+      scenes = [scenes];
+    }
+  } catch (e) {
+    log(`⚠️ Failed to parse SCENES: ${e.message}`);
+    log('🔄 Using default test scene...');
+    scenes = [{ id: 1, text: "Test video scene 1" }];
+  }
+  
+  const topic = process.env.TOPIC || 'test';
+  const date = process.env.DATE || new Date().toISOString().split('T')[0];
   const ntfyTopic = process.env.NTFY_TOPIC;
 
   log(`📝 Topic: ${topic}`);
@@ -93,73 +109,64 @@ async function run() {
   try {
     log('🌐 Navigating to Google Vids...');
     await page.goto('https://vids.google.com');
-    await page.waitForLoadState('networkidle', { timeout: 30000 });
+    await page.waitForTimeout(5000); // Wait for page to settle
     log(`📄 Page title: ${await page.title()}`);
     log(`🌍 Page URL: ${page.url()}`);
 
-    await page.waitForTimeout(3000);
     await page.screenshot({ path: 'homepage.png' });
     log('📸 Homepage screenshot saved');
 
-    // --- CREATE NEW VIDEO ---
-    log('📹 Looking for Create button...');
-    const createSelectors = [
-      'button:has-text("Create")',
-      'button:has-text("New")',
-      'button:has-text("+")',
-      '[aria-label="Create"]',
-      '[aria-label="New"]',
-      '[data-testid="create-button"]',
-      'a:has-text("Create")',
-      'div[role="button"]:has-text("Create")',
-      'button[class*="create"]',
-      'button[class*="new"]'
+    // --- NEW UI: Click "Start a new video" ---
+    log('📹 Looking for "Start a new video" button...');
+    const startSelectors = [
+      'button:has-text("Start a new video")',
+      'button:has-text("Start new video")',
+      'button:has-text("New video")',
+      'a:has-text("Start a new video")',
+      'div[role="button"]:has-text("Start")',
+      '[aria-label="Start a new video"]',
+      '[data-testid="start-new-video"]',
+      'button[class*="start"]',
+      'button[class*="create"]:has-text("Start")'
     ];
-    const createSuccess = await smartClick(createSelectors, 'Create');
-    if (!createSuccess) {
-      log('⚠️ Create button not found, clicking body...');
+    
+    let startSuccess = await smartClick(startSelectors, 'Start a new video');
+    if (!startSuccess) {
+      log('⚠️ Start button not found, trying alternative...');
+      // Try clicking on the main area
       await page.click('body');
       await page.waitForTimeout(2000);
-      await smartClick(createSelectors, 'Create');
+      startSuccess = await smartClick(startSelectors, 'Start a new video');
     }
 
-    // --- HANDLE POPUPS ---
-    log('📹 Checking for popups...');
-    try {
-      const popup = await page.waitForSelector('button:has-text("Got it")', { timeout: 3000 });
-      if (popup) {
-        await popup.click();
-        log('✅ Dismissed popup');
-      }
-    } catch (e) {
-      log('ℹ️ No popup found');
+    if (!startSuccess) {
+      log('❌ Failed to find Start button');
+      await page.screenshot({ path: 'error-start.png' });
+      throw new Error('Start a new video button not found');
     }
 
-    // --- SELECT ORIENTATION ---
+    // --- Select orientation ---
     log('📹 Selecting orientation...');
+    await page.waitForTimeout(3000);
     const orientationSelectors = [
       'button:has-text("Landscape")',
       'button:has-text("16:9")',
       '[aria-label="Landscape"]',
-      '[data-testid="landscape"]',
-      'button[class*="landscape"]'
+      '[data-testid="landscape"]'
     ];
     await smartClick(orientationSelectors, 'Landscape');
 
-    // --- CREATE AI VIDEO ---
-    log('📹 Looking for Create AI video button...');
+    // --- Create AI video ---
+    log('📹 Looking for "Create AI video" button...');
+    await page.waitForTimeout(2000);
     const aiSelectors = [
       'button:has-text("Create AI video")',
       'button:has-text("AI video")',
+      'button:has-text("Create with AI")',
       '[aria-label="Create AI video"]',
-      '[data-testid="ai-video"]',
-      'button[class*="ai-video"]'
+      '[data-testid="ai-video"]'
     ];
-    const aiSuccess = await smartClick(aiSelectors, 'AI video');
-    if (!aiSuccess) {
-      log('⚠️ Create AI video button not found, trying Start...');
-      await smartClick(['button:has-text("Start")', 'button:has-text("Blank")', '[aria-label="Start from scratch"]'], 'Start');
-    }
+    await smartClick(aiSelectors, 'AI video');
 
     await page.waitForTimeout(5000);
 
@@ -222,8 +229,7 @@ async function run() {
     await smartClick([
       'button:has-text("Play")',
       '[aria-label="Play"]',
-      '[data-testid="play"]',
-      'button[class*="play"]'
+      '[data-testid="play"]'
     ], 'Play');
     await page.waitForTimeout(10000);
 
