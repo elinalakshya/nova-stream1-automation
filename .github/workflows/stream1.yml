@@ -39,7 +39,13 @@ jobs:
           DATE: ${{ github.event.client_payload.date }}
         run: |
           node scripts/automate.js
-
+- name: Upload automation log
+  uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: automation-log
+    path: automate.log
+    
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
         if: always()
